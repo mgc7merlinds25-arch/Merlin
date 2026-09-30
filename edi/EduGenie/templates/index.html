@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduGenie - Learning Assistant</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <main class="container">
+        <section class="card">
+            <h1>EduGenie</h1>
+            <p class="subtitle">Google Gemini Powered Learning Assistant</p>
+
+            <form id="eduForm">
+                <label for="task">Choose a task</label>
+                <select id="task">
+                    <option value="qa">Ask a Question</option>
+                    <option value="explain">Explain a Topic</option>
+                    <option value="quiz">Generate Quiz</option>
+                    <option value="summarize">Summarize</option>
+                    <option value="learn">Recommend Learning Path</option>
+                </select>
+
+                <label for="userInput">Enter your question, topic, or text</label>
+                <textarea id="userInput" rows="9"
+                    placeholder="Type here..."></textarea>
+
+                <button type="submit">Generate</button>
+            </form>
+
+            <div id="status" class="status"></div>
+
+            <section id="result" class="result hidden">
+                <h2>Result</h2>
+                <div id="resultContent"></div>
+            </section>
+        </section>
+    </main>
+
+<script>
+const form = document.getElementById("eduForm");
+const task = document.getElementById("task");
+const input = document.getElementById("userInput");
+const statusBox = document.getElementById("status");
+const resultBox = document.getElementById("result");
+const resultContent = document.getElementById("resultContent");
+
+function escapeHtml(value) {
+    return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+
+function renderQuiz(quiz) {
+    return quiz.map((q, i) => `
+        <div class="quiz-question">
+            <h3>${i + 1}. ${escapeHtml(q.question)}</h3>
+            ${q.options.map((option, j) => `
+                <button class="option"
+                        data-answer="${escapeHtml(option)}"
+                        data-correct="${escapeHtml(q.correct_answer)}">
+                    ${String.fromCharCode(65 + j)}. ${escapeHtml(option)}
+                </button>
+            `).join("")}
+            <p class="feedback"></p>
+        </div>
+    `).join("");
+}
+
+form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const value = input.value.trim();
+    if (!value) {
+        statusBox.textContent = "Please enter some text.";
+        return;
+    }
+
+    statusBox.textContent = "Generating...";
+    resultBox.classList.add("hidden");
+    resultContent.innerHTML = "";
+
+    const endpoints = {
+        qa: "/qa",
+        explain: "/explain",
+        quiz: "/quiz",
+        summarize: "/summarize",
+        learn: "/learn/recommendations"
+    };
+
+    const bodyKeys = {
+        qa: "question",
+        explain: "topic",
+        quiz: "text",
+        summarize: "text",
+        learn: "topic"
+    };
+
+    try {
+        const response = await fetch(endpoints[task.value], {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({[bodyKeys[task.value]]: value})
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || "Request failed.");
+        }
+
+        if (task.value === "qa") {
+            resultContent.innerHTML =
+                `<div class="text-result">${escapeHtml(data.answer).replaceAll("\n", "<br>")}</div>`;
+        } else if (task.value === "explain") {
+            resultContent.innerHTML =
+                `<div class="text-result">${escapeHtml(data.explanation).replaceAll("\n", "<br>")}</div>`;
+        } else if (task.value === "summarize") {
+            resultContent.innerHTML =
+                `<div class="text-result">${escapeHtml(data.summary).replaceAll("\n", "<br>")}</div>`;
+        } else if (task.value === "learn") {
+            resultContent.innerHTML =
+                `<div class="text-result">${escapeHtml(data.recommendations).replaceAll("\n", "<br>")}</div>`;
+        } else if (task.value === "quiz") {
+            resultContent.innerHTML = renderQuiz(data.quiz);
+
+            document.querySelectorAll(".option").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    const feedback = btn.parentElement.querySelector(".feedback");
+                    const correct = btn.dataset.correct;
+                    const answer = btn.dataset.answer;
+
+                    if (answer === correct) {
+                        feedback.textContent = "Correct!";
+                        feedback.className = "feedback correct";
+                    } else {
+                        feedback.textContent = "Incorrect. Correct answer: " + correct;
+                        feedback.className = "feedback incorrect";
+                    }
+                });
+            });
+        }
+
+        resultBox.classList.remove("hidden");
+        statusBox.textContent = "";
+    } catch (error) {
+        statusBox.textContent = error.message;
+    }
+});
+</script>
+</body>
+</html>
